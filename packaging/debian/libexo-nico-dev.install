@@ -1,0 +1,3 @@
+usr/include/*
+usr/lib/*/libexo_nico.so
+usr/lib/*/pkgconfig/libexo_nico.pc

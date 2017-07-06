@@ -1,0 +1,4 @@
+usr/bin/exo-nico-main
+etc/exo-nico/exo-nico-main.cfg
+lib/systemd/system/exo-nico-main.service
+
