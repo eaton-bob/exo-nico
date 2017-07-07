@@ -166,23 +166,24 @@ exo_nico_server (zsock_t *pipe, void* args)
 void
 exo_nico_server_test (bool verbose)
 {
-    printf (" * exo_nico_server: ");
+    printf (" * exo_nico_server test : ");
 
     //  @selftest
     static const char* endpoint = "inproc://exo-nico-server-test";      
 
-     //get client object
-
-    mlm_client_t * streamClient = mlm_client_new();
-    assert (streamClient);
-
-    //  Set up broker, fty example server actor and third party actor
+        //  Set up broker, fty example server actor and third party actor
     zactor_t *server = zactor_new (mlm_server, (void*)"Malamute");
     zstr_sendx (server, "BIND", endpoint, NULL);
     if (verbose)
         zstr_send (server, "VERBOSE");
 
     zactor_t *example_server = zactor_new (exo_nico_server, (void *) endpoint);
+
+    
+     //get client object
+
+    mlm_client_t * streamClient = mlm_client_new();
+    assert (streamClient);
 
     printf ("Stream Test\n");
 
