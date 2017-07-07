@@ -37,10 +37,20 @@ s_handle_message (mlm_client_t *client, char *message)
 {
     assert (client);
     zmsg_t *reply_message = zmsg_new();
-
+    const char * subject = mlm_client_subject(client);
+    const char * mb_exo = "exo-nico";
+    const char * mb_ping = "ping";
+    const char* mb_dest = mb_exo;
+    
+    
     if (message == NULL) {
         printf ("Commande : %s Message : NULL \n",mlm_client_command (client));
         zmsg_addstr (reply_message, "NULLVALUE");
+    }else if (streq(subject,"ping"))
+    {
+        printf ("Commande : %s Message Ping \n",mlm_client_command (client));
+        zmsg_addstr (reply_message, "GNIP");
+        mb_dest = mb_ping;
     }else {
         printf ("Commande : %s Message : %s\n",mlm_client_command (client),message);
         zmsg_addstr (reply_message, message);
@@ -48,7 +58,7 @@ s_handle_message (mlm_client_t *client, char *message)
     
     //..by the same way it comes
     if (streq (mlm_client_command (client), "MAILBOX DELIVER")) {
-        int rv = mlm_client_sendto (client, mlm_client_sender (client), "exo-nico", NULL, 1000, &reply_message);
+        int rv = mlm_client_sendto (client, mlm_client_sender (client), mb_dest, NULL, 1000, &reply_message);
         if (rv != 0) {
             zmsg_destroy (&reply_message);
             zsys_error ("mlm_client_sendto (subject = '%s') failed");
@@ -74,7 +84,6 @@ s_handle_message (mlm_client_t *client, char *message)
 
 //  --------------------------------------------------------------------------
 // server action
-
 void
 exo_nico_server (zsock_t *pipe, void* args)
 {
@@ -114,7 +123,7 @@ exo_nico_server (zsock_t *pipe, void* args)
 
     zpoller_t *poller = zpoller_new (pipe, mlm_client_msgpipe (client), NULL);
     zsock_signal (pipe, 0);
-    zsys_debug ("actor ready");
+    zsys_debug ("actor server ready");
 
     while (!zsys_interrupted) {
 
@@ -160,7 +169,7 @@ exo_nico_server_test (bool verbose)
     printf (" * exo_nico_server: ");
 
     //  @selftest
-static const char* endpoint = "inproc://exo-nico-server-test";      
+    static const char* endpoint = "inproc://exo-nico-server-test";      
 
      //get client object
 
@@ -215,7 +224,7 @@ static const char* endpoint = "inproc://exo-nico-server-test";
     
     printf ("MailBox Test\n");
 
-    //  Test MAILBOX deliver:l
+    //  Test MAILBOX deliver
     mlm_client_t * mailBoxClient = mlm_client_new();
     assert (mailBoxClient);
 

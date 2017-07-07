@@ -39,14 +39,9 @@ EXO_NICO_EXPORT void
 EXO_NICO_EXPORT void
     exo_nico_client_test (bool verbose);
 
-//getter of clients
-EXO_NICO_EXPORT mlm_client_t * 
-    getClientStream(exo_nico_client_t *self);
-
-EXO_NICO_EXPORT mlm_client_t * 
-    getClientMailBox(exo_nico_client_t *self);
-
-        
+// actor action
+EXO_NICO_EXPORT void
+    exo_nico_client(zsock_t *pipe, void* args);
         
         
 

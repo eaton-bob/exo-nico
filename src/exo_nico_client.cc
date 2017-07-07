@@ -33,20 +33,8 @@ struct _exo_nico_client_t {
     //  Declare class properties here
     mlm_client_t *client_Stream;
     mlm_client_t *client_Mailbox;
+    mlm_client_t *client_Main;
 };
-
-//getter Stream client
-mlm_client_t * getClientStream(exo_nico_client_t *self)
-{
-    return self->client_Stream;
-}
-
-//getter MailBox client
-mlm_client_t * getClientMailBox(exo_nico_client_t *self)
-{
-    return self->client_Mailbox;
-}
-
 
 //  --------------------------------------------------------------------------
 //  Create a new exo_nico_client
@@ -58,6 +46,7 @@ exo_nico_client_new (void)
     assert (self);
     self->client_Stream =  mlm_client_new ();
     self->client_Mailbox =  mlm_client_new ();
+    self->client_Main =  mlm_client_new ();
     //  Initialize class properties here
     return self;
 }
@@ -75,11 +64,118 @@ exo_nico_client_destroy (exo_nico_client_t **self_p)
         //  Free class properties here
         mlm_client_destroy(&self->client_Stream);
         mlm_client_destroy(&self->client_Mailbox);
+        mlm_client_destroy(&self->client_Main);
         //  Free object itself
         free (self);
         *self_p = NULL;
     }
 }
+
+///////////////////////////////
+//Actor action
+
+void
+exo_nico_client(zsock_t *pipe, void* args)
+{
+    //Create client object
+    exo_nico_client_t *self = exo_nico_client_new ();
+    const char *endpoint = (const char *) args;
+    
+    //client connected to main program
+    int rv = mlm_client_connect (self->client_Main, endpoint, 1000, "main");
+    if (rv == -1) {
+        mlm_client_destroy (&self->client_Main);
+        zsys_error (
+                "mlm_client_connect (endpoint = '%s', timeout = '%d', address = '%s') failed.",
+                endpoint, 1000, "main");
+        return;
+    } 
+
+    //client connected to mailbox server
+    rv = mlm_client_connect (self->client_Mailbox, endpoint, 1000, "ping");
+    if (rv == -1) {
+        mlm_client_destroy (&self->client_Mailbox);
+        zsys_error (
+                "mlm_client_connect (endpoint = '%s', timeout = '%d', address = '%s') failed.",
+                endpoint, 1000, "ping");
+        return;
+    } 
+
+    //client connected to stream server
+    rv = mlm_client_set_consumer (self->client_Stream, EXO_NICO_STREAM_RETURN, ".*");
+    if (rv == -1) {
+        mlm_client_destroy (&self->client_Stream);
+        zsys_error (
+                "mlm_client_set_consumer (stream = '%s', pattern = '%s') failed.",
+                EXO_NICO_STREAM, ".*");
+        return;
+    }
+
+    rv = mlm_client_set_producer (self->client_Stream, EXO_NICO_STREAM);
+    if (rv == -1) {
+        mlm_client_destroy (&self->client_Stream);
+        zsys_error ("mlm_client_set_consumer (stream = '%s') failed.", EXO_NICO_STREAM_RETURN);
+        return;
+    } 
+    
+    
+    zpoller_t *poller = zpoller_new (pipe, mlm_client_msgpipe (self->client_Main), NULL);
+    zsock_signal (pipe, 0);
+    zsys_debug ("actor server ready");
+    
+    while (!zsys_interrupted) {
+
+        void *which = zpoller_wait (poller, -1);
+        if (which == pipe) {
+            zmsg_t *message = zmsg_recv (pipe);
+            char *actor_command = zmsg_popstr (message);
+            //  $TERM actor command implementation is required by zactor_t interface
+            if (streq (actor_command, "$TERM")) {
+                zstr_free (&actor_command);
+                zmsg_destroy (&message);
+                break;
+            }
+            zstr_free (&actor_command);
+            zmsg_destroy (&message);
+            continue;
+        } else 
+        if (which == mlm_client_msgpipe (self->client_Main)) {
+            //Send a ping message to server
+            //by Stream
+            zmsg_t *asset_message = zmsg_new ();
+            zmsg_addstr (asset_message, "PING");
+            assert (asset_message);
+            rv = mlm_client_send (self->client_Stream, "ping", &asset_message);
+            assert (rv == 0);
+            zmsg_t *message = mlm_client_recv (self->client_Stream);
+            assert (message);
+            char* msgReceive = zmsg_popstr (message);
+            assert (streq (msgReceive, "GNIP"));
+            zstr_free(&msgReceive);
+            zmsg_destroy (&message);
+            
+            //by mailbox
+            message = zmsg_new ();
+            zmsg_addstr (message, "PING");
+            rv = mlm_client_sendto (self->client_Mailbox, "ping", "ping", NULL, 1000, &message);
+            assert (rv == 0);
+            message = mlm_client_recv (self->client_Mailbox);
+            assert (message);
+            char *ret = zmsg_popstr (message);
+            assert (ret!=NULL);
+            assert (streq (ret, "GNIP"));
+            zstr_free (&ret);
+            zmsg_destroy (&message);
+            
+        }
+    }
+    
+    //delete client object
+    exo_nico_client_destroy (&self);
+    zpoller_destroy (&poller);
+}
+
+
 
 //  --------------------------------------------------------------------------
 //  Self test of this class
@@ -92,26 +188,13 @@ exo_nico_client_test (bool verbose)
     //  @selftest
     //  Simple create/destroy test
 
-    // Note: If your selftest reads SCMed fixture data, please keep it in
-    // src/selftest-ro; if your test creates filesystem objects, please
-    // do so under src/selftest-rw. They are defined below along with a
-    // usecase for the variables (assert) to make compilers happy.
-    const char *SELFTEST_DIR_RO = "src/selftest-ro";
-    const char *SELFTEST_DIR_RW = "src/selftest-rw";
-    assert (SELFTEST_DIR_RO);
-    assert (SELFTEST_DIR_RW);
-    // Uncomment these to use C++ strings in C++ selftest code:
-    //std::string str_SELFTEST_DIR_RO = std::string(SELFTEST_DIR_RO);
-    //std::string str_SELFTEST_DIR_RW = std::string(SELFTEST_DIR_RW);
-    //assert ( (str_SELFTEST_DIR_RO != "") );
-    //assert ( (str_SELFTEST_DIR_RW != "") );
-    // NOTE that for "char*" context you need (str_SELFTEST_DIR_RO + "/myfilename").c_str()
-
     exo_nico_client_t *self = exo_nico_client_new ();
     assert (self);
     assert(self->client_Stream);
     assert(self->client_Mailbox);
+    assert(self->client_Main);
     exo_nico_client_destroy (&self);
     //  @end
     printf ("OK\n");
 }
+

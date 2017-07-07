@@ -20,5 +20,6 @@ Ex :
 If a NULL message is send, the server reply with the message "NULLVALUE"
 
 ##Architecture
+
 They are an actor with 2 clients, one to send stream message, the second send mailbox message 
 
