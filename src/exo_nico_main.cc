@@ -89,11 +89,11 @@ int main (int argc, char *argv [])
                 endpoint, 1000, "main");
         return EXIT_FAILURE;
     } 
-
+    
     //  Accept and print any messconstage back from server
     //  copy from src/malamute.c under MPL license
     while (true) {
-        char *msg_srv = zstr_recv (server);
+        /*char *msg_srv = zstr_recv (server);
         char *msg_clt = zstr_recv (client);
         if (msg_srv) {
             puts (msg_srv);
@@ -109,16 +109,19 @@ int main (int argc, char *argv [])
             puts ("interrupted");
             break;
         }
-        
-        
+        */
+        printf("Send Ping \n");
+
         zmsg_t* message = zmsg_new ();
         zmsg_addstr (message, "ping");
         rv = mlm_client_sendto (clientMain, "main", "ping", NULL, 1000, &message);
+        assert(rv);
         
-        sleep(2);
+        sleep(1);
     }
     
     zactor_destroy (&server);
+    zactor_destroy (&client);
     mlm_client_destroy(&clientMain);
     return EXIT_SUCCESS;
 }
