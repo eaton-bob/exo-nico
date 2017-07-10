@@ -240,7 +240,7 @@ exo_nico_server_test (bool verbose)
     message = mlm_client_recv (mailBoxClient);
     assert (message);
     char *ret = zmsg_popstr (message);
-    assert (ret!=NULL);
+    assert (ret);
     assert (streq (ret, "BWAAAAAAH"));
     zstr_free (&ret);
     zmsg_destroy (&message);
@@ -252,10 +252,24 @@ exo_nico_server_test (bool verbose)
     message = mlm_client_recv (mailBoxClient);
     assert (message);
     char *error = zmsg_popstr (message);
-    assert (error!=NULL);
+    assert (error);
     assert (streq (error, "NULLVALUE"));
     zstr_free (&error);
     zmsg_destroy (&message);
+    
+    //Send a ping message
+    message = zmsg_new ();
+    zmsg_addstr (message, "BWAAAH");
+    rv = mlm_client_sendto (mailBoxClient, "exo-nico", "ping", NULL, 1000, &message);
+    assert (rv == 0);
+    message = mlm_client_recv (mailBoxClient);
+    assert (message);
+    ret = zmsg_popstr (message);
+    assert (ret);
+    assert (streq (ret, "GNIP"));
+    zstr_free (&ret);
+    zmsg_destroy (&message);
+    
     
     //
     mlm_client_destroy(&mailBoxClient);
