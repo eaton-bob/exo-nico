@@ -90,9 +90,9 @@ exo_nico_client(zsock_t *pipe, void* args)
                 endpoint, 1000, "main");
         return;
     } 
-
+    
     //client connected to mailbox server
-    rv = mlm_client_connect (self->client_Mailbox, endpoint, 1000, "pingM");
+    rv = mlm_client_connect (self->client_Mailbox, endpoint, 1000, "ping");
     if (rv == -1) {
         mlm_client_destroy (&self->client_Mailbox);
         zsys_error (
@@ -102,7 +102,7 @@ exo_nico_client(zsock_t *pipe, void* args)
     } 
 
     //client connected to stream server
-    rv = mlm_client_connect (self->client_Stream, endpoint, 1000, "pingS");
+    rv = mlm_client_connect (self->client_Stream, endpoint, 1000, "stream");
     assert (rv == 0);
 
     rv = mlm_client_set_consumer (self->client_Stream, EXO_NICO_STREAM_RETURN, ".*");
@@ -143,44 +143,49 @@ exo_nico_client(zsock_t *pipe, void* args)
             zmsg_destroy (&message);
             continue;
         }  
+        
         if (which == mlm_client_msgpipe (self->client_Main)) {
+            zmsg_t *messageMain = mlm_client_recv (self->client_Main);
+            zmsg_destroy (&messageMain);
+
             //Send a ping message to server
             //by Stream
             printf("Ping Stream\n");
-            zmsg_t *asset_message = zmsg_new ();
-            zmsg_addstr (asset_message, "PING");
-            assert (asset_message);
-            rv = mlm_client_send (self->client_Stream, "ping", &asset_message);
+            zmsg_t *messagePing = zmsg_new ();
+            assert (messagePing);
+            zmsg_addstr (messagePing, "PING");
+            rv = mlm_client_send (self->client_Stream, "ping", &messagePing);
             assert (rv == 0);
             
             //by mailbox
             printf("Ping mailBox \n");
-            zmsg_t *message = zmsg_new ();
-            zmsg_addstr (message, "PING");
-            rv = mlm_client_sendto (self->client_Mailbox, "pingM", "ping", NULL, 1000, &message);
+            messagePing = zmsg_new ();
+            assert (messagePing);
+            zmsg_addstr (messagePing, "PING");
+            rv = mlm_client_sendto (self->client_Mailbox, "exo-nico", "ping", NULL, 1000, &messagePing);
             assert (rv == 0);
-            
+      
         }
         
         if (which == mlm_client_msgpipe (self->client_Stream)) {
-            zmsg_t *message = mlm_client_recv (self->client_Stream);
-            assert (message);
-            char* msgReceive = zmsg_popstr (message);
+            zmsg_t *messageS = mlm_client_recv (self->client_Stream);
+            assert (messageS);
+            char* msgReceive = zmsg_popstr (messageS);
             printf("retour ping stream : %s\n",msgReceive);
             assert (streq (msgReceive, "GNIP"));
+            zmsg_destroy (&messageS);
             zstr_free(&msgReceive);
-            zmsg_destroy (&message);
         
         }
         if (which == mlm_client_msgpipe (self->client_Mailbox)) {
-            zmsg_t* message = mlm_client_recv (self->client_Mailbox);
-            assert (message);
-            char *ret = zmsg_popstr (message);
+            zmsg_t* messageMB = mlm_client_recv (self->client_Mailbox);
+            assert (messageMB);
+            char *ret = zmsg_popstr (messageMB);
             assert (ret);
             printf("retour ping mailbox : %s\n",ret);
             assert (streq (ret, "GNIP"));
+            zmsg_destroy (&messageMB);
             zstr_free (&ret);
-            zmsg_destroy (&message);
         
         }
     }
@@ -210,8 +215,6 @@ exo_nico_client_test (bool verbose)
     assert(self->client_Main);
     exo_nico_client_destroy (&self);
    
-    return;
-    
      printf (" client test : \n");
 
     //  @selftest
@@ -236,7 +239,7 @@ exo_nico_client_test (bool verbose)
     mlm_client_t * mailBoxReturn = mlm_client_new();
     assert (mailBoxReturn);
 
-    rv = mlm_client_connect (mailBoxReturn, endpoint, 1000, "ping");
+    rv = mlm_client_connect (mailBoxReturn, endpoint, 1000, "exo-nico");
     assert (rv == 0);
     
     printf("Stream client\n");
@@ -250,49 +253,48 @@ exo_nico_client_test (bool verbose)
     assert (rv == 0);
     rv = mlm_client_set_producer (streamClient, EXO_NICO_STREAM_RETURN);
     assert (rv == 0);
-
-
+    
     //Send a message
     printf ("Envoi sur main\n");
-    zmsg_t *message = zmsg_new ();
-    zmsg_addstr (message, "PING");
-    rv = mlm_client_sendto (mailBoxClient, "main", "ping", NULL, 1000, &message);
-    assert (rv == 0);
-
-    printf ("Reception Stream\n");
-    message = mlm_client_recv (streamClient);
-    assert (message);
-    char * msgReceive = zmsg_popstr (message);
-    printf("Message Stream : %s\n",msgReceive);
-    assert (streq (msgReceive, "PING"));
-    zstr_free(&msgReceive);
-    zmsg_destroy (&message);
-    zmsg_t *asset_message = zmsg_new ();
-    zmsg_addstr (asset_message, "GNIP");
-    assert (asset_message);
-    rv = mlm_client_send (streamClient, "ping", &asset_message);
+    zmsg_t *messageMain = zmsg_new ();
+    zmsg_addstr (messageMain, "DummyMsg");
+    rv = mlm_client_sendto (mailBoxClient, "main", "ping", NULL, 1000, &messageMain);
     assert (rv == 0);
     
+    printf ("Reception Stream\n");
+    zmsg_t * messageS = mlm_client_recv (streamClient);
+    assert (messageS);
+    char * msgReceive = zmsg_popstr (messageS);
+    printf("Message Stream : %s\n",msgReceive);
+    assert (streq (msgReceive, "PING"));
+    zmsg_destroy (&messageS);
+    zstr_free(&msgReceive);
+    zmsg_t *messageReturnS = zmsg_new ();
+    zmsg_addstr (messageReturnS, "GNIP");
+    assert (messageReturnS);
+    rv = mlm_client_send (streamClient, "ping", &messageReturnS);
+    assert (rv == 0);
+
     printf ("Reception MailBox\n");
-    message = mlm_client_recv (mailBoxReturn);
-    assert (message);
-    char *ret = zmsg_popstr (message);
+    zmsg_t * messageMB = mlm_client_recv (mailBoxReturn);
+    assert (messageMB);
+    char *ret = zmsg_popstr (messageMB);
+
     printf("Message Mailbox : %s \n",ret);
     assert (streq (ret, "PING"));
-    message = zmsg_new ();
-    zmsg_addstr (message, "GNIP");
-    rv = mlm_client_sendto (mailBoxReturn, "pingM", "ping", NULL, 1000, &message);
-    assert (rv == 0);
+    zmsg_destroy (&messageMB);
     zstr_free (&ret);
-    zmsg_destroy (&message);
-
-        
+    zmsg_t *messageReturnMB = zmsg_new ();
+    zmsg_addstr (messageReturnMB, "GNIP");
+    rv = mlm_client_sendto (mailBoxReturn, "ping", "ping", NULL, 1000, &messageReturnMB);
+    assert (rv == 0);
+      
     mlm_client_destroy(&mailBoxReturn);
     mlm_client_destroy(&mailBoxClient);
     mlm_client_destroy(&streamClient);
     zactor_destroy (&example_server);
     zactor_destroy (&server);
-    
+
     //  @end
     printf ("OK\n");
 
